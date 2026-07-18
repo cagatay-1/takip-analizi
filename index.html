@@ -223,13 +223,37 @@
   .u-info { min-width: 0; }
   .u-info .uname { font-weight: 600; font-size: 14.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .u-info .udate { font-size: 11.5px; color: var(--text-dim); margin-top: 2px; }
+  .row-actions { margin-left: auto; flex-shrink: 0; display: flex; gap: 7px; align-items: center; }
   .open-link {
-    margin-left: auto; flex-shrink: 0; text-decoration: none;
+    flex-shrink: 0; text-decoration: none;
     font-size: 12.5px; font-weight: 600; color: var(--text-dim);
     border: 1px solid var(--border); border-radius: 10px; padding: 7px 13px;
-    transition: all .15s;
+    transition: all .15s; white-space: nowrap; cursor: pointer;
   }
   .open-link:hover { background: var(--ig); color: #fff; border-color: transparent; }
+  .open-link.action { color: var(--text); border-color: var(--accent); }
+  .open-link.action:hover { background: var(--ig); }
+  .done-btn {
+    flex-shrink: 0; border: 1px solid var(--border); background: var(--panel);
+    color: var(--text-dim); border-radius: 10px; padding: 7px 11px;
+    font-size: 12.5px; font-weight: 600; cursor: pointer; transition: all .15s; white-space: nowrap;
+  }
+  .done-btn:hover { border-color: var(--green); color: var(--green); }
+  .user-row.done { opacity: .45; }
+  .user-row.done .done-btn { background: var(--green); color: #fff; border-color: var(--green); }
+  .user-row.done .open-link.action { display: none; }
+
+  .progress-note { font-size: 12.5px; color: var(--text-dim); margin-bottom: 12px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+  .progress-note .toggle-done {
+    background: none; border: none; color: var(--accent); cursor: pointer;
+    font-size: 12.5px; font-weight: 600; padding: 0; text-decoration: underline;
+  }
+  .next-btn {
+    padding: 11px 16px; background: var(--ig); border: none; color: #fff;
+    border-radius: 12px; font-size: 13.5px; font-weight: 700; cursor: pointer;
+    white-space: nowrap; box-shadow: 0 4px 14px rgba(220,39,67,.3); transition: transform .15s;
+  }
+  .next-btn:active { transform: scale(.97); }
 
   .empty-state { text-align: center; padding: 60px 20px; color: var(--text-dim); }
   .empty-state .icon { font-size: 44px; margin-bottom: 10px; }
@@ -316,7 +340,7 @@
   </div>
   <input type="file" id="fileInput" multiple accept=".zip,.json,.html">
   <div class="error-box" id="errorBox"></div>
-  <div class="ver">Sürüm 4</div>
+  <div class="ver">Sürüm 5</div>
 </div>
 
 <!-- ============ 2) PANEL EKRANI ============ -->
@@ -338,9 +362,9 @@
       <div class="nav-wrap" id="navWrap"></div>
 
       <div class="sb-footer">
-        <div class="sb-note">🔒 Verin bu sayfadan dışarı çıkmaz. Sekmeyi kapattığında her şey silinir.</div>
+        <div class="sb-note">🔒 Takip verin bu sayfadan dışarı çıkmaz. Yalnızca "yaptım" işaretlerin, ilerlemen kaybolmasın diye bu cihazda saklanır.</div>
         <button class="reset-btn" id="resetBtn">↺ Yeni dosya yükle</button>
-        <div class="ver">Sürüm 4</div>
+        <div class="ver">Sürüm 5</div>
       </div>
     </aside>
 
@@ -362,9 +386,11 @@
           <option value="date-asc">En eski önce</option>
           <option value="az">A → Z</option>
         </select>
+        <button class="next-btn" id="nextBtn" style="display:none">▶ Sıradakini aç</button>
         <button class="copy-btn" id="copyBtn">📋 Listeyi kopyala</button>
       </div>
 
+      <div class="progress-note" id="progressNote"></div>
       <div class="user-list" id="userList"></div>
     </main>
   </div>
@@ -386,24 +412,45 @@
     notBack: {
       emoji: '💔', title: 'Takip Etmeyenler',
       desc: 'Senin takip ettiğin ama seni geri takip etmeyen hesaplar. Tarih, o kişiyi ne zaman takip ettiğini gösterir.',
-      dateLabel: 'takip ettin'
+      dateLabel: 'takip ettin',
+      actionLabel: 'Takipten çık ↗', // profili açar; asıl işlemi Instagram'da tek dokunuşla sen yaparsın
+      helper: true
     },
     pending: {
       emoji: '⏳', title: 'İstek Gönderdiklerin',
       desc: 'Takip isteği gönderdiğin ama henüz kabul edilmemiş (bekleyen) hesaplar. Tarih, isteği ne zaman attığını gösterir.',
-      dateLabel: 'istek attın'
+      dateLabel: 'istek attın',
+      actionLabel: 'İsteği geri çek ↗',
+      helper: true
     },
     fans: {
       emoji: '🤍', title: 'Hayranların',
       desc: 'Seni takip eden ama senin takip etmediğin hesaplar.',
-      dateLabel: 'seni takip etti'
+      dateLabel: 'seni takip etti',
+      actionLabel: 'Profili aç ↗',
+      helper: false
     },
     mutual: {
       emoji: '🤝', title: 'Karşılıklı',
       desc: 'İki tarafın da birbirini takip ettiği hesaplar.',
-      dateLabel: 'takip ettin'
+      dateLabel: 'takip ettin',
+      actionLabel: 'Profili aç ↗',
+      helper: false
     }
   };
+
+  // "Yaptım" işaretleri — tarayıcıda kalıcı saklanır (done[sekme] = {kullanıcıAdı: true})
+  let done = {};
+  try { done = JSON.parse(localStorage.getItem('takip-done') || '{}'); } catch { done = {}; }
+  let hideDone = true; // işaretlenenler varsayılan olarak gizli
+
+  function isDone(tab, u) { return !!(done[tab] && done[tab][u]); }
+  function setDone(tab, u, val) {
+    if (!done[tab]) done[tab] = {};
+    if (val) done[tab][u] = true; else delete done[tab][u];
+    try { localStorage.setItem('takip-done', JSON.stringify(done)); } catch {}
+  }
+  function doneCount(tab) { return done[tab] ? Object.keys(done[tab]).length : 0; }
 
   /* ---------- Dosya yükleme ---------- */
   dropzone.addEventListener('click', () => fileInput.click());
@@ -619,7 +666,9 @@
       b.classList.toggle('active', b.dataset.tab === key)
     );
     $('tabTitle').innerHTML = `${TABS[key].emoji} ${TABS[key].title}`;
-    $('tabDesc').textContent = TABS[key].desc;
+    $('tabDesc').innerHTML = escapeHtml(TABS[key].desc) + (TABS[key].helper
+      ? ` <span style="color:var(--yellow)">Butona basınca kişinin profili açılır; asıl işlemi güvenlik için Instagram'ın kendi ekranında tek dokunuşla sen yaparsın.</span>`
+      : '');
     $('searchBox').value = '';
     renderList();
   }
@@ -632,14 +681,40 @@
     return new Date(t * 1000).toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric' });
   }
 
-  function renderList() {
+  // Aktif sekmede sıralanmış tam listeyi (arama filtresiyle) döndürür
+  function currentList() {
     const query = $('searchBox').value.trim().toLowerCase();
     const sort = $('sortSelect').value;
     let list = data[activeTab].filter(x => x.u.toLowerCase().includes(query));
-
     if (sort === 'az') list.sort((a, b) => a.u.localeCompare(b.u, 'tr'));
     else if (sort === 'date-asc') list.sort((a, b) => (a.t || 0) - (b.t || 0));
     else list.sort((a, b) => (b.t || 0) - (a.t || 0));
+    return list;
+  }
+
+  function renderList() {
+    const tab = TABS[activeTab];
+    const query = $('searchBox').value.trim().toLowerCase();
+    let list = currentList();
+
+    // "Yaptım" işaretliler gizli moddaysa listeden düş
+    const total = list.length;
+    if (hideDone) list = list.filter(x => !isDone(activeTab, x.u));
+
+    // İlerleme notu ve "Sıradakini aç" butonu (yalnızca yardımcı modlu sekmelerde)
+    const dc = doneCount(activeTab);
+    if (tab.helper && (total > 0 || dc > 0)) {
+      $('nextBtn').style.display = '';
+      $('progressNote').style.display = 'flex';
+      $('progressNote').innerHTML = dc > 0
+        ? `✅ <b>${dc}</b> kişiyi işaretledin. <button class="toggle-done" id="toggleDone">${hideDone ? 'İşaretlenenleri göster' : 'İşaretlenenleri gizle'}</button>`
+        : `İpucu: bir kişiyi hallettikten sonra <b>✓ Yaptım</b> ile işaretle, listede kalabalık azalsın.`;
+      const td = $('toggleDone');
+      if (td) td.onclick = () => { hideDone = !hideDone; renderList(); };
+    } else {
+      $('nextBtn').style.display = 'none';
+      $('progressNote').style.display = 'none';
+    }
 
     if (!list.length) {
       let msg;
@@ -647,7 +722,9 @@
         msg = { icon: '🔎', big: 'Sonuç yok', p: 'Aramanla eşleşen kullanıcı bulunamadı.' };
       } else if (activeTab === 'pending' && !pendingFileFound) {
         msg = { icon: '📄', big: 'İstek verisi bulunamadı',
-          p: 'ZIP\'in içinde pending_follow_requests.json dosyası yoktu. Veri talebinde "Takipçiler ve takip edilenler" kategorisinin tamamını seçtiğinden emin ol — bekleyen istekler o kategoriyle birlikte gelir.' };
+          p: 'Yüklediğin dosyalarda bekleyen istekler yoktu. Veri talebinde "Takipçiler ve takip edilenler" kategorisinin tamamını seçtiğinden emin ol — bekleyen istekler o kategoriyle birlikte gelir.' };
+      } else if (tab.helper && dc > 0) {
+        msg = { icon: '🎉', big: 'Hepsini hallettin!', p: 'Bu listedeki herkesi işaretledin. Harika iş!' };
       } else {
         msg = { icon: '🎉', big: 'Bu liste boş', p: 'Burada gösterilecek kimse yok — bu iyi bir şey!' };
       }
@@ -655,31 +732,64 @@
       return;
     }
 
-    const dateLabel = TABS[activeTab].dateLabel;
-    $('userList').innerHTML = list.map(x => `
-      <div class="user-row">
+    const dateLabel = tab.dateLabel;
+    $('userList').innerHTML = list.map(x => {
+      const url = `https://www.instagram.com/${encodeURIComponent(x.u)}/`;
+      const marked = isDone(activeTab, x.u);
+      const doneBtn = tab.helper
+        ? `<button class="done-btn" data-done="${escapeAttr(x.u)}">${marked ? '✓ Yapıldı' : '✓ Yaptım'}</button>`
+        : '';
+      return `
+      <div class="user-row ${marked ? 'done' : ''}" data-user="${escapeAttr(x.u)}">
         <div class="avatar">${x.u.charAt(0).toUpperCase()}</div>
         <div class="u-info">
           <div class="uname">@${escapeHtml(x.u)}</div>
           ${x.t ? `<div class="udate">${formatDate(x.t)} · ${dateLabel}</div>` : ''}
         </div>
-        <a class="open-link" href="https://www.instagram.com/${encodeURIComponent(x.u)}/" target="_blank" rel="noopener">Profili aç ↗</a>
-      </div>
-    `).join('');
+        <div class="row-actions">
+          <a class="open-link action" href="${url}" target="_blank" rel="noopener">${tab.actionLabel}</a>
+          ${doneBtn}
+        </div>
+      </div>`;
+    }).join('');
   }
+
+  // "Yaptım" butonuna tıklama (tek dinleyici, tüm satırlar için)
+  $('userList').addEventListener('click', e => {
+    const btn = e.target.closest('.done-btn');
+    if (!btn) return;
+    const u = btn.getAttribute('data-done');
+    setDone(activeTab, u, !isDone(activeTab, u));
+    renderList();
+  });
+
+  // "Sıradakini aç": listedeki ilk işaretlenmemiş kişiyi yeni sekmede açar
+  $('nextBtn').addEventListener('click', () => {
+    const next = currentList().find(x => !isDone(activeTab, x.u));
+    if (!next) { showToast('🎉 Bu listede halledilecek kimse kalmadı!'); return; }
+    window.open(`https://www.instagram.com/${encodeURIComponent(next.u)}/`, '_blank', 'noopener');
+    showToast(`@${next.u} açıldı — Instagram'da işlemi yapıp "✓ Yaptım" de`);
+  });
+
+  function escapeAttr(s) { return s.replace(/"/g, '&quot;'); }
 
   function escapeHtml(s) {
     return s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   }
 
-  /* ---------- Kopyala ve sıfırla ---------- */
+  /* ---------- Bildirim, kopyala ve sıfırla ---------- */
+  let toastTimer = null;
+  function showToast(msg) {
+    const toast = $('toast');
+    toast.textContent = msg;
+    toast.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => toast.classList.remove('show'), 2600);
+  }
+
   $('copyBtn').addEventListener('click', () => {
     const text = data[activeTab].map(x => '@' + x.u).join('\n');
-    navigator.clipboard.writeText(text).then(() => {
-      const toast = $('toast');
-      toast.classList.add('show');
-      setTimeout(() => toast.classList.remove('show'), 2200);
-    });
+    navigator.clipboard.writeText(text).then(() => showToast('✅ Liste panoya kopyalandı'));
   });
 
   $('resetBtn').addEventListener('click', () => {

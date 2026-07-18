@@ -1,5 +1,5 @@
 // Service worker: uygulama dosyalarını önbelleğe alır, çevrimdışı çalışmayı sağlar.
-const CACHE = 'takip-analizi-v4';
+const CACHE = 'takip-analizi-v5';
 const FILES = [
   './',
   './index.html',
