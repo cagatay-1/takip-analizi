@@ -1,0 +1,591 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#0b0b12">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Takip Analizi — Instagram</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+<script src="jszip.min.js"></script>
+<style>
+  :root {
+    --bg: #0b0b12;
+    --panel: #14141f;
+    --card: #1b1b29;
+    --card-hover: #232336;
+    --border: #2a2a40;
+    --text: #f2f2f7;
+    --text-dim: #9494ab;
+    --ig: linear-gradient(45deg, #f09433, #e6683c, #dc2743, #cc2366, #bc1888);
+    --accent: #dc2743;
+    --green: #34c77b;
+    --yellow: #e6a23c;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg); color: var(--text); min-height: 100vh;
+  }
+  a { color: inherit; }
+  button { font-family: inherit; }
+
+  /* ============ YÜKLEME EKRANI ============ */
+  #uploadScreen { max-width: 860px; margin: 0 auto; padding: 40px 20px 60px; }
+  .up-header { text-align: center; margin-bottom: 32px; }
+  .logo {
+    width: 64px; height: 64px; margin: 0 auto 14px;
+    background: var(--ig); border-radius: 20px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 32px; box-shadow: 0 8px 32px rgba(220,39,67,.35);
+  }
+  h1 {
+    font-size: 26px; font-weight: 800;
+    background: var(--ig);
+    -webkit-background-clip: text; background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  .up-header p { color: var(--text-dim); margin-top: 6px; font-size: 15px; }
+
+  .steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 20px; }
+  .step {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 16px; padding: 18px;
+  }
+  .step .n {
+    width: 26px; height: 26px; border-radius: 8px; background: var(--ig);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 13px; font-weight: 700; margin-bottom: 10px;
+  }
+  .step h3 { font-size: 14px; margin-bottom: 6px; }
+  .step p { font-size: 12.5px; color: var(--text-dim); line-height: 1.6; }
+  .step b { color: var(--text); }
+
+  .security-banner {
+    display: flex; gap: 12px; align-items: flex-start;
+    background: rgba(52,199,123,.08); border: 1px solid rgba(52,199,123,.3);
+    border-radius: 14px; padding: 14px 18px; margin-bottom: 20px;
+    font-size: 13px; color: var(--text-dim); line-height: 1.6;
+  }
+  .security-banner .ico { font-size: 20px; }
+  .security-banner b { color: var(--green); }
+
+  .action-row { display: flex; flex-direction: column; gap: 12px; margin-bottom: 20px; }
+  .big-btn {
+    display: flex; align-items: center; justify-content: center; gap: 10px;
+    padding: 17px 20px; border-radius: 16px; font-size: 16px; font-weight: 700;
+    text-align: center; cursor: pointer; text-decoration: none;
+    border: none; transition: all .2s;
+  }
+  .big-btn.primary {
+    background: var(--ig); color: #fff;
+    box-shadow: 0 8px 24px rgba(220,39,67,.35);
+  }
+  .big-btn.primary:active { transform: scale(.98); }
+  .big-btn.secondary {
+    background: var(--panel); border: 1px solid var(--border); color: var(--text);
+  }
+  .big-btn.secondary:hover, .big-btn.secondary:active { border-color: var(--accent); }
+  .big-btn .step-no {
+    width: 26px; height: 26px; border-radius: 50%; flex-shrink: 0;
+    background: rgba(255,255,255,.2);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 13px;
+  }
+  .big-btn.secondary .step-no { background: var(--card); }
+
+  .dropzone {
+    border: 2px dashed var(--border); border-radius: 20px;
+    padding: 40px 24px; text-align: center; cursor: pointer;
+    transition: all .25s; background: var(--panel);
+  }
+  @media (max-width: 720px) { .dropzone { display: none; } }
+  .dropzone:hover, .dropzone.dragover {
+    border-color: var(--accent); background: var(--card); transform: scale(1.01);
+  }
+  .dropzone .icon { font-size: 40px; margin-bottom: 10px; }
+  .dropzone .t1 { font-size: 16px; font-weight: 600; }
+  .dropzone .t2 { color: var(--text-dim); font-size: 13px; margin-top: 4px; }
+  #fileInput { display: none; }
+
+  .error-box {
+    margin-top: 14px; padding: 13px 16px; border-radius: 12px;
+    background: rgba(220,39,67,.12); border: 1px solid rgba(220,39,67,.4);
+    font-size: 14px; display: none;
+  }
+
+  /* ============ PANEL EKRANI ============ */
+  #appScreen { display: none; min-height: 100vh; }
+  .layout { display: flex; min-height: 100vh; }
+
+  .sidebar {
+    width: 250px; flex-shrink: 0; background: var(--panel);
+    border-right: 1px solid var(--border);
+    padding: 24px 16px; display: flex; flex-direction: column; gap: 6px;
+    position: sticky; top: 0; height: 100vh; overflow-y: auto;
+  }
+  .sb-brand { display: flex; align-items: center; gap: 10px; padding: 0 8px; margin-bottom: 18px; }
+  .sb-brand .mini-logo {
+    width: 34px; height: 34px; border-radius: 10px; background: var(--ig);
+    display: flex; align-items: center; justify-content: center; font-size: 17px;
+  }
+  .sb-brand span { font-weight: 700; font-size: 15px; }
+
+  .ratio-card {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 14px; padding: 14px; margin-bottom: 14px;
+  }
+  .ratio-card .lbl { font-size: 11.5px; color: var(--text-dim); margin-bottom: 6px; }
+  .ratio-card .val { font-size: 22px; font-weight: 800; margin-bottom: 8px; }
+  .bar { height: 6px; border-radius: 3px; background: var(--border); overflow: hidden; }
+  .bar > div { height: 100%; background: var(--ig); border-radius: 3px; transition: width .6s ease; }
+  .ratio-card .sub { font-size: 11px; color: var(--text-dim); margin-top: 8px; }
+
+  .nav-btn {
+    display: flex; align-items: center; gap: 10px;
+    padding: 11px 12px; border-radius: 12px; border: none;
+    background: transparent; color: var(--text-dim);
+    font-size: 13.5px; font-weight: 600; cursor: pointer;
+    text-align: left; transition: all .15s; width: 100%;
+  }
+  .nav-btn:hover { background: var(--card); color: var(--text); }
+  .nav-btn.active { background: var(--ig); color: #fff; }
+  .nav-btn .emoji { font-size: 16px; }
+  .nav-btn .count {
+    margin-left: auto; font-size: 11.5px; font-weight: 700;
+    background: rgba(255,255,255,.12); border-radius: 20px;
+    padding: 2px 9px; min-width: 28px; text-align: center;
+  }
+  .nav-btn:not(.active) .count { background: var(--card); color: var(--text-dim); }
+
+  .sb-footer { margin-top: auto; padding-top: 16px; }
+  .sb-note { font-size: 11px; color: var(--text-dim); line-height: 1.6; padding: 0 8px; margin-bottom: 12px; }
+  .reset-btn {
+    width: 100%; padding: 10px; border-radius: 12px;
+    background: transparent; border: 1px solid var(--border);
+    color: var(--text-dim); font-size: 13px; cursor: pointer; transition: all .2s;
+  }
+  .reset-btn:hover { border-color: var(--accent); color: var(--text); }
+
+  .content { flex: 1; padding: 28px 32px; max-width: 780px; }
+  .content-head { margin-bottom: 6px; }
+  .content-head h2 { font-size: 21px; display: flex; align-items: center; gap: 10px; }
+  .content-head .desc { color: var(--text-dim); font-size: 13.5px; margin-top: 5px; line-height: 1.6; }
+
+  .toolbar { display: flex; gap: 10px; margin: 18px 0 14px; flex-wrap: wrap; }
+  .search-box {
+    flex: 1; min-width: 180px; padding: 11px 16px;
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 12px; color: var(--text); font-size: 14px; outline: none;
+  }
+  .search-box:focus { border-color: var(--accent); }
+  .search-box::placeholder { color: var(--text-dim); }
+  .sort-select {
+    padding: 11px 14px; background: var(--panel); border: 1px solid var(--border);
+    border-radius: 12px; color: var(--text); font-size: 13.5px; outline: none; cursor: pointer;
+    font-family: inherit;
+  }
+  .copy-btn {
+    padding: 11px 16px; background: var(--panel); border: 1px solid var(--border);
+    border-radius: 12px; color: var(--text-dim); font-size: 13.5px; cursor: pointer;
+    transition: all .2s; white-space: nowrap;
+  }
+  .copy-btn:hover { border-color: var(--accent); color: var(--text); }
+
+  .user-list { display: flex; flex-direction: column; gap: 7px; }
+  .user-row {
+    display: flex; align-items: center; gap: 13px;
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 13px; padding: 11px 15px; transition: all .15s;
+  }
+  .user-row:hover { background: var(--card-hover); border-color: var(--accent); }
+  .avatar {
+    width: 40px; height: 40px; border-radius: 50%; background: var(--ig);
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: 16px; color: #fff; flex-shrink: 0;
+  }
+  .u-info { min-width: 0; }
+  .u-info .uname { font-weight: 600; font-size: 14.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .u-info .udate { font-size: 11.5px; color: var(--text-dim); margin-top: 2px; }
+  .open-link {
+    margin-left: auto; flex-shrink: 0; text-decoration: none;
+    font-size: 12.5px; font-weight: 600; color: var(--text-dim);
+    border: 1px solid var(--border); border-radius: 10px; padding: 7px 13px;
+    transition: all .15s;
+  }
+  .open-link:hover { background: var(--ig); color: #fff; border-color: transparent; }
+
+  .empty-state { text-align: center; padding: 60px 20px; color: var(--text-dim); }
+  .empty-state .icon { font-size: 44px; margin-bottom: 10px; }
+  .empty-state .big { font-size: 15px; font-weight: 600; color: var(--text); margin-bottom: 6px; }
+  .empty-state p { font-size: 13px; line-height: 1.7; max-width: 380px; margin: 0 auto; }
+
+  .toast {
+    position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(80px);
+    background: var(--card); border: 1px solid var(--green); color: var(--text);
+    padding: 12px 22px; border-radius: 12px; font-size: 14px;
+    transition: transform .3s ease; z-index: 10;
+  }
+  .toast.show { transform: translateX(-50%) translateY(0); }
+
+  /* ============ MOBİL ============ */
+  @media (max-width: 720px) {
+    .steps { grid-template-columns: 1fr; }
+    .layout { flex-direction: column; }
+    .sidebar {
+      width: 100%; height: auto; position: static;
+      border-right: none; border-bottom: 1px solid var(--border);
+      padding: 16px;
+    }
+    .nav-wrap { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 4px; }
+    .nav-btn { width: auto; white-space: nowrap; }
+    .sb-footer { margin-top: 10px; }
+    .sb-note { display: none; }
+    .content { padding: 20px 16px; }
+  }
+  @media (min-width: 721px) { .nav-wrap { display: flex; flex-direction: column; gap: 6px; } }
+</style>
+</head>
+<body>
+
+<!-- ============ 1) YÜKLEME EKRANI ============ -->
+<div id="uploadScreen">
+  <div class="up-header">
+    <div class="logo">🔍</div>
+    <h1>Takip Analizi</h1>
+    <p>Seni takip etmeyenleri ve bekleyen takip isteklerini gör — şifresiz, verin bilgisayarından çıkmaz</p>
+  </div>
+
+  <div class="action-row">
+    <a class="big-btn primary" href="https://accountscenter.instagram.com/info_and_permissions/dyi/" target="_blank" rel="noopener">
+      <span class="step-no">1</span> Instagram'a bağlan — verini iste
+    </a>
+    <button class="big-btn secondary" id="pickFileBtn">
+      <span class="step-no">2</span> 📁 Gelen ZIP dosyasını seç
+    </button>
+  </div>
+
+  <div class="steps">
+    <div class="step">
+      <div class="n">1</div>
+      <h3>Butona bas, isteği oluştur</h3>
+      <p>Yukarıdaki buton seni doğrudan Instagram'ın <b>"Bilgilerini indir"</b> sayfasına götürür. Orada <b>Bilgi indir veya aktar → Bilgilerin bir kısmı</b> de ve yalnızca <b>"Takipçiler ve takip edilenler"</b> kutusunu işaretle. Format: <b>JSON</b>, tarih aralığı: <b>Tüm zamanlar</b>.</p>
+    </div>
+    <div class="step">
+      <div class="n">2</div>
+      <h3>Kısa bir bekleme</h3>
+      <p>Instagram veriyi hazırlayıp <b>e-postana bir ZIP bağlantısı</b> gönderir. Genelde birkaç dakika sürer. Bu adımı hiçbir uygulama atlayamaz — veriyi yalnızca Instagram hazırlar.</p>
+    </div>
+    <div class="step">
+      <div class="n">3</div>
+      <h3>ZIP'i seç, sonucu gör</h3>
+      <p>ZIP'i telefonuna indir ve <b>"Gelen ZIP dosyasını seç"</b> butonuyla göster. Takip etmeyenler, bekleyen isteklerin ve tüm analiz anında ekrana gelir.</p>
+    </div>
+  </div>
+
+  <div class="security-banner">
+    <div class="ico">🔒</div>
+    <div>
+      <b>Güvenlik:</b> Sadece "Takipçiler ve takip edilenler" kategorisini seçtiğinde ZIP'in içinde
+      <b>mesajların, fotoğrafların veya başka hiçbir verin bulunmaz</b> — Instagram onları hiç eklemez.
+      Bu uygulama şifreni asla sormaz, hesabına giriş yapmaz ve dosyanı hiçbir sunucuya göndermez;
+      tüm analiz kendi cihazında yapılır.
+    </div>
+  </div>
+
+  <div class="dropzone" id="dropzone">
+    <div class="icon">📦</div>
+    <div class="t1">Bilgisayardaysan: ZIP dosyanı buraya sürükle</div>
+    <div class="t2">ZIP ya da followers / following / pending_follow_requests JSON dosyaları</div>
+  </div>
+  <input type="file" id="fileInput" multiple accept=".zip,.json">
+  <div class="error-box" id="errorBox"></div>
+</div>
+
+<!-- ============ 2) PANEL EKRANI ============ -->
+<div id="appScreen">
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="sb-brand">
+        <div class="mini-logo">🔍</div>
+        <span>Takip Analizi</span>
+      </div>
+
+      <div class="ratio-card">
+        <div class="lbl">GERİ TAKİP ORANI</div>
+        <div class="val" id="ratioVal">%0</div>
+        <div class="bar"><div id="ratioBar" style="width:0%"></div></div>
+        <div class="sub" id="ratioSub"></div>
+      </div>
+
+      <div class="nav-wrap" id="navWrap"></div>
+
+      <div class="sb-footer">
+        <div class="sb-note">🔒 Verin bu sayfadan dışarı çıkmaz. Sekmeyi kapattığında her şey silinir.</div>
+        <button class="reset-btn" id="resetBtn">↺ Yeni dosya yükle</button>
+      </div>
+    </aside>
+
+    <main class="content">
+      <div class="content-head">
+        <h2 id="tabTitle"></h2>
+        <div class="desc" id="tabDesc"></div>
+      </div>
+
+      <div class="toolbar">
+        <input type="text" class="search-box" id="searchBox" placeholder="Kullanıcı adı ara...">
+        <select class="sort-select" id="sortSelect">
+          <option value="date-desc">En yeni önce</option>
+          <option value="date-asc">En eski önce</option>
+          <option value="az">A → Z</option>
+        </select>
+        <button class="copy-btn" id="copyBtn">📋 Listeyi kopyala</button>
+      </div>
+
+      <div class="user-list" id="userList"></div>
+    </main>
+  </div>
+</div>
+
+<div class="toast" id="toast">✅ Liste panoya kopyalandı</div>
+
+<script>
+  const $ = id => document.getElementById(id);
+  const dropzone = $('dropzone'), fileInput = $('fileInput'), errorBox = $('errorBox');
+
+  // data[sekme] = [{u: kullanıcı adı, t: unix zaman damgası | null}]
+  let data = { notBack: [], pending: [], fans: [], mutual: [] };
+  let pendingFileFound = false;
+  let activeTab = 'notBack';
+
+  const TABS = {
+    notBack: {
+      emoji: '💔', title: 'Takip Etmeyenler',
+      desc: 'Senin takip ettiğin ama seni geri takip etmeyen hesaplar. Tarih, o kişiyi ne zaman takip ettiğini gösterir.',
+      dateLabel: 'takip ettin'
+    },
+    pending: {
+      emoji: '⏳', title: 'İstek Gönderdiklerin',
+      desc: 'Takip isteği gönderdiğin ama henüz kabul edilmemiş (bekleyen) hesaplar. Tarih, isteği ne zaman attığını gösterir.',
+      dateLabel: 'istek attın'
+    },
+    fans: {
+      emoji: '🤍', title: 'Hayranların',
+      desc: 'Seni takip eden ama senin takip etmediğin hesaplar.',
+      dateLabel: 'seni takip etti'
+    },
+    mutual: {
+      emoji: '🤝', title: 'Karşılıklı',
+      desc: 'İki tarafın da birbirini takip ettiği hesaplar.',
+      dateLabel: 'takip ettin'
+    }
+  };
+
+  /* ---------- Dosya yükleme ---------- */
+  dropzone.addEventListener('click', () => fileInput.click());
+  $('pickFileBtn').addEventListener('click', () => fileInput.click());
+  fileInput.addEventListener('change', () => handleFiles(fileInput.files));
+  dropzone.addEventListener('dragover', e => { e.preventDefault(); dropzone.classList.add('dragover'); });
+  dropzone.addEventListener('dragleave', () => dropzone.classList.remove('dragover'));
+  dropzone.addEventListener('drop', e => {
+    e.preventDefault(); dropzone.classList.remove('dragover');
+    handleFiles(e.dataTransfer.files);
+  });
+
+  function showError(msg) {
+    errorBox.textContent = '⚠️ ' + msg;
+    errorBox.style.display = 'block';
+  }
+
+  async function handleFiles(files) {
+    errorBox.style.display = 'none';
+    try {
+      let followers = [], following = [], pending = [];
+
+      for (const file of files) {
+        const lower = file.name.toLowerCase();
+        if (lower.endsWith('.zip')) {
+          const zip = await JSZip.loadAsync(file);
+          for (const path of Object.keys(zip.files)) {
+            const name = path.split('/').pop().toLowerCase();
+            if (!name.endsWith('.json')) continue;
+            const read = () => zip.files[path].async('string').then(JSON.parse);
+            if (name.startsWith('followers')) followers.push(...parseUsers(await read()));
+            else if (name === 'following.json') following.push(...parseUsers(await read()));
+            else if (name.includes('follow_requests') && name.includes('pending')) {
+              pending.push(...parseUsers(await read()));
+              pendingFileFound = true;
+            }
+          }
+        } else if (lower.endsWith('.json')) {
+          const parsed = JSON.parse(await file.text());
+          if (lower.startsWith('followers')) followers.push(...parseUsers(parsed));
+          else if (lower.startsWith('following')) following.push(...parseUsers(parsed));
+          else if (lower.includes('follow_requests')) {
+            pending.push(...parseUsers(parsed));
+            pendingFileFound = true;
+          }
+        }
+      }
+
+      if (!followers.length && !following.length && !pending.length) {
+        showError('Dosyada takip verisi bulunamadı. İndirirken JSON formatını ve "Takipçiler ve takip edilenler" kategorisini seçtiğinden emin ol.');
+        return;
+      }
+      if (!following.length) {
+        showError('following.json bulunamadı — takip ettiklerin listesi eksik. ZIP\'in tamamını yüklemeyi dene.');
+        return;
+      }
+
+      analyze(followers, following, pending);
+    } catch (err) {
+      showError('Dosya okunamadı: ' + err.message);
+    }
+  }
+
+  // Instagram'ın farklı export sürümlerindeki JSON yapılarını {u, t} listesine çevirir
+  function parseUsers(json) {
+    let items = [];
+    if (Array.isArray(json)) items = json;
+    else if (json.relationships_followers) items = json.relationships_followers;
+    else if (json.relationships_following) items = json.relationships_following;
+    else if (json.relationships_follow_requests_sent) items = json.relationships_follow_requests_sent;
+
+    const users = [];
+    for (const item of items) {
+      const entry = (item.string_list_data && item.string_list_data[0]) || item;
+      const name = entry.value || entry.title;
+      if (name) users.push({ u: name, t: entry.timestamp || null });
+    }
+    return users;
+  }
+
+  function dedupe(list) {
+    const seen = new Map();
+    for (const x of list) if (!seen.has(x.u)) seen.set(x.u, x);
+    return [...seen.values()];
+  }
+
+  function analyze(followers, following, pending) {
+    followers = dedupe(followers);
+    following = dedupe(following);
+    const followerSet = new Set(followers.map(x => x.u));
+    const followingSet = new Set(following.map(x => x.u));
+
+    data.notBack = following.filter(x => !followerSet.has(x.u));
+    data.fans = followers.filter(x => !followingSet.has(x.u));
+    data.mutual = following.filter(x => followerSet.has(x.u));
+    data.pending = dedupe(pending);
+
+    // Geri takip oranı: takip ettiklerinin yüzde kaçı seni geri takip ediyor
+    const ratio = following.length ? Math.round(data.mutual.length / following.length * 100) : 0;
+    $('ratioVal').textContent = '%' + ratio;
+    $('ratioBar').style.width = ratio + '%';
+    $('ratioSub').textContent = `${following.length} takipten ${data.mutual.length}'i seni geri takip ediyor`;
+
+    buildNav();
+    $('uploadScreen').style.display = 'none';
+    $('appScreen').style.display = 'block';
+    switchTab('notBack');
+  }
+
+  /* ---------- Gezinme ve liste ---------- */
+  function buildNav() {
+    $('navWrap').innerHTML = Object.entries(TABS).map(([key, t]) => `
+      <button class="nav-btn" data-tab="${key}">
+        <span class="emoji">${t.emoji}</span> ${t.title}
+        <span class="count">${data[key].length}</span>
+      </button>
+    `).join('');
+    document.querySelectorAll('.nav-btn').forEach(btn =>
+      btn.addEventListener('click', () => switchTab(btn.dataset.tab))
+    );
+  }
+
+  function switchTab(key) {
+    activeTab = key;
+    document.querySelectorAll('.nav-btn').forEach(b =>
+      b.classList.toggle('active', b.dataset.tab === key)
+    );
+    $('tabTitle').innerHTML = `${TABS[key].emoji} ${TABS[key].title}`;
+    $('tabDesc').textContent = TABS[key].desc;
+    $('searchBox').value = '';
+    renderList();
+  }
+
+  $('searchBox').addEventListener('input', renderList);
+  $('sortSelect').addEventListener('change', renderList);
+
+  function formatDate(t) {
+    if (!t) return '';
+    return new Date(t * 1000).toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric' });
+  }
+
+  function renderList() {
+    const query = $('searchBox').value.trim().toLowerCase();
+    const sort = $('sortSelect').value;
+    let list = data[activeTab].filter(x => x.u.toLowerCase().includes(query));
+
+    if (sort === 'az') list.sort((a, b) => a.u.localeCompare(b.u, 'tr'));
+    else if (sort === 'date-asc') list.sort((a, b) => (a.t || 0) - (b.t || 0));
+    else list.sort((a, b) => (b.t || 0) - (a.t || 0));
+
+    if (!list.length) {
+      let msg;
+      if (query) {
+        msg = { icon: '🔎', big: 'Sonuç yok', p: 'Aramanla eşleşen kullanıcı bulunamadı.' };
+      } else if (activeTab === 'pending' && !pendingFileFound) {
+        msg = { icon: '📄', big: 'İstek verisi bulunamadı',
+          p: 'ZIP\'in içinde pending_follow_requests.json dosyası yoktu. Veri talebinde "Takipçiler ve takip edilenler" kategorisinin tamamını seçtiğinden emin ol — bekleyen istekler o kategoriyle birlikte gelir.' };
+      } else {
+        msg = { icon: '🎉', big: 'Bu liste boş', p: 'Burada gösterilecek kimse yok — bu iyi bir şey!' };
+      }
+      $('userList').innerHTML = `<div class="empty-state"><div class="icon">${msg.icon}</div><div class="big">${msg.big}</div><p>${msg.p}</p></div>`;
+      return;
+    }
+
+    const dateLabel = TABS[activeTab].dateLabel;
+    $('userList').innerHTML = list.map(x => `
+      <div class="user-row">
+        <div class="avatar">${x.u.charAt(0).toUpperCase()}</div>
+        <div class="u-info">
+          <div class="uname">@${escapeHtml(x.u)}</div>
+          ${x.t ? `<div class="udate">${formatDate(x.t)} · ${dateLabel}</div>` : ''}
+        </div>
+        <a class="open-link" href="https://www.instagram.com/${encodeURIComponent(x.u)}/" target="_blank" rel="noopener">Profili aç ↗</a>
+      </div>
+    `).join('');
+  }
+
+  function escapeHtml(s) {
+    return s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+
+  /* ---------- Kopyala ve sıfırla ---------- */
+  $('copyBtn').addEventListener('click', () => {
+    const text = data[activeTab].map(x => '@' + x.u).join('\n');
+    navigator.clipboard.writeText(text).then(() => {
+      const toast = $('toast');
+      toast.classList.add('show');
+      setTimeout(() => toast.classList.remove('show'), 2200);
+    });
+  });
+
+  $('resetBtn').addEventListener('click', () => {
+    data = { notBack: [], pending: [], fans: [], mutual: [] };
+    pendingFileFound = false;
+    fileInput.value = '';
+    $('appScreen').style.display = 'none';
+    $('uploadScreen').style.display = 'block';
+  });
+
+  // PWA: çevrimdışı çalışma ve "Ana ekrana ekle" desteği
+  if ('serviceWorker' in navigator && location.protocol !== 'file:') {
+    navigator.serviceWorker.register('sw.js');
+  }
+</script>
+</body>
+</html>
