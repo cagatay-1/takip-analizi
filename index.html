@@ -469,28 +469,59 @@
     return users;
   }
 
-  // HTML formatındaki export'u okur: her kişi bir instagram.com profil bağlantısıdır
+  // Türkçe ay kısaltmalarını İngilizceye çevirip tarih metnini çözmeyi dener
+  const TR_MONTHS = { 'oca':'Jan','şub':'Feb','mar':'Mar','nis':'Apr','may':'May','haz':'Jun','tem':'Jul','ağu':'Aug','eyl':'Sep','eki':'Oct','kas':'Nov','ara':'Dec' };
+  function parseDateText(s) {
+    if (!s) return null;
+    let x = s.trim().toLowerCase().replace(/öö/g, 'am').replace(/ös/g, 'pm');
+    x = x.replace(/^[a-zçğıişöü]+/, m => TR_MONTHS[m.slice(0, 3)] || m);
+    const d = new Date(x);
+    return isNaN(d.getTime()) ? null : Math.floor(d.getTime() / 1000);
+  }
+
+  // HTML formatındaki export'u okur — Instagram iki farklı biçim kullanıyor
   function parseHtmlUsers(htmlText) {
     const doc = new DOMParser().parseFromString(htmlText, 'text/html');
     const users = [];
     const seen = new Set();
+    const add = (name, t) => {
+      if (name && !seen.has(name)) { seen.add(name); users.push({ u: name, t }); }
+    };
+
+    // Biçim 1: her kişi bir instagram.com profil bağlantısı (takipçiler / takip edilenler)
     doc.querySelectorAll('a[href*="instagram.com/"]').forEach(a => {
       try {
         const path = new URL(a.getAttribute('href')).pathname;
         const name = decodeURIComponent(path.split('/').filter(Boolean).pop() || '');
-        if (!name || seen.has(name)) return;
-        seen.add(name);
-
-        // Tarihi bağlantının bulunduğu kutudaki metinden yakalamayı dene (bulunamazsa boş kalır)
-        let t = null;
+        if (!name) return;
         const box = a.closest('div');
         const txt = box && box.parentElement ? box.parentElement.textContent : '';
-        const d = new Date(txt.replace(a.textContent, '').trim());
-        if (!isNaN(d.getTime())) t = Math.floor(d.getTime() / 1000);
-
-        users.push({ u: name, t });
+        add(name, parseDateText(txt.replace(a.textContent, '')));
       } catch {}
     });
+
+    // Biçim 2: "Kullanıcı adı" etiketli tablolar (bekleyen istekler bu biçimde)
+    doc.querySelectorAll('table').forEach(table => {
+      let name = null;
+      table.querySelectorAll('tr').forEach(tr => {
+        const tds = tr.querySelectorAll('td');
+        if (tds.length >= 2 && /kullanıcı adı|username/i.test(tds[0].textContent)) {
+          name = tds[1].textContent.trim();
+        }
+      });
+      if (!name) return;
+
+      // Tarih, kaydın kutusunun en dışındaki ayrı bir satırda durur
+      let t = null;
+      let el = table.parentElement;
+      while (el && el.tagName !== 'BODY') {
+        const dateDiv = el.querySelector(':scope > div[class*="_a6-o"]');
+        if (dateDiv) { t = parseDateText(dateDiv.textContent); break; }
+        el = el.parentElement;
+      }
+      add(name, t);
+    });
+
     return users;
   }
 
