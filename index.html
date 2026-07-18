@@ -299,9 +299,9 @@
   <div class="dropzone" id="dropzone">
     <div class="icon">📦</div>
     <div class="t1">Bilgisayardaysan: ZIP dosyanı buraya sürükle</div>
-    <div class="t2">ZIP ya da followers / following / pending_follow_requests JSON dosyaları</div>
+    <div class="t2">ZIP ya da followers / following / pending_follow_requests dosyaları (JSON veya HTML)</div>
   </div>
-  <input type="file" id="fileInput" multiple accept=".zip,.json">
+  <input type="file" id="fileInput" multiple accept=".zip,.json,.html">
   <div class="error-box" id="errorBox"></div>
 </div>
 
@@ -400,10 +400,27 @@
     errorBox.style.display = 'block';
   }
 
+  // Dosya adına bakarak hangi listeye ait olduğunu bulur
+  function categorize(name) {
+    if (name.startsWith('followers')) return 'followers';
+    if (name === 'following.json' || name === 'following.html') return 'following';
+    if (name.includes('follow_requests') && name.includes('pending')) return 'pending';
+    return null;
+  }
+
   async function handleFiles(files) {
     errorBox.style.display = 'none';
     try {
-      let followers = [], following = [], pending = [];
+      const lists = { followers: [], following: [], pending: [] };
+
+      // JSON veya HTML fark etmeksizin içeriği ilgili listeye ekler
+      const addEntry = (name, text) => {
+        const cat = categorize(name);
+        if (!cat) return;
+        const users = name.endsWith('.html') ? parseHtmlUsers(text) : parseUsers(JSON.parse(text));
+        lists[cat].push(...users);
+        if (cat === 'pending') pendingFileFound = true;
+      };
 
       for (const file of files) {
         const lower = file.name.toLowerCase();
@@ -411,36 +428,25 @@
           const zip = await JSZip.loadAsync(file);
           for (const path of Object.keys(zip.files)) {
             const name = path.split('/').pop().toLowerCase();
-            if (!name.endsWith('.json')) continue;
-            const read = () => zip.files[path].async('string').then(JSON.parse);
-            if (name.startsWith('followers')) followers.push(...parseUsers(await read()));
-            else if (name === 'following.json') following.push(...parseUsers(await read()));
-            else if (name.includes('follow_requests') && name.includes('pending')) {
-              pending.push(...parseUsers(await read()));
-              pendingFileFound = true;
-            }
+            if (!name.endsWith('.json') && !name.endsWith('.html')) continue;
+            if (!categorize(name)) continue;
+            addEntry(name, await zip.files[path].async('string'));
           }
-        } else if (lower.endsWith('.json')) {
-          const parsed = JSON.parse(await file.text());
-          if (lower.startsWith('followers')) followers.push(...parseUsers(parsed));
-          else if (lower.startsWith('following')) following.push(...parseUsers(parsed));
-          else if (lower.includes('follow_requests')) {
-            pending.push(...parseUsers(parsed));
-            pendingFileFound = true;
-          }
+        } else if (lower.endsWith('.json') || lower.endsWith('.html')) {
+          addEntry(lower, await file.text());
         }
       }
 
-      if (!followers.length && !following.length && !pending.length) {
-        showError('Dosyada takip verisi bulunamadı. İndirirken JSON formatını ve "Takipçiler ve takip edilenler" kategorisini seçtiğinden emin ol.');
+      if (!lists.followers.length && !lists.following.length && !lists.pending.length) {
+        showError('Dosyada takip verisi bulunamadı. followers, following veya pending_follow_requests dosyalarını (JSON ya da HTML) ya da ZIP\'in kendisini seçtiğinden emin ol.');
         return;
       }
-      if (!following.length) {
-        showError('following.json bulunamadı — takip ettiklerin listesi eksik. ZIP\'in tamamını yüklemeyi dene.');
+      if (!lists.following.length) {
+        showError('"following" dosyası bulunamadı — takip ettiklerin listesi eksik. ZIP\'in tamamını ya da following.json/following.html dosyasını yüklemeyi dene.');
         return;
       }
 
-      analyze(followers, following, pending);
+      analyze(lists.followers, lists.following, lists.pending);
     } catch (err) {
       showError('Dosya okunamadı: ' + err.message);
     }
@@ -460,6 +466,31 @@
       const name = entry.value || entry.title;
       if (name) users.push({ u: name, t: entry.timestamp || null });
     }
+    return users;
+  }
+
+  // HTML formatındaki export'u okur: her kişi bir instagram.com profil bağlantısıdır
+  function parseHtmlUsers(htmlText) {
+    const doc = new DOMParser().parseFromString(htmlText, 'text/html');
+    const users = [];
+    const seen = new Set();
+    doc.querySelectorAll('a[href*="instagram.com/"]').forEach(a => {
+      try {
+        const path = new URL(a.getAttribute('href')).pathname;
+        const name = decodeURIComponent(path.split('/').filter(Boolean).pop() || '');
+        if (!name || seen.has(name)) return;
+        seen.add(name);
+
+        // Tarihi bağlantının bulunduğu kutudaki metinden yakalamayı dene (bulunamazsa boş kalır)
+        let t = null;
+        const box = a.closest('div');
+        const txt = box && box.parentElement ? box.parentElement.textContent : '';
+        const d = new Date(txt.replace(a.textContent, '').trim());
+        if (!isNaN(d.getTime())) t = Math.floor(d.getTime() / 1000);
+
+        users.push({ u: name, t });
+      } catch {}
+    });
     return users;
   }
 
