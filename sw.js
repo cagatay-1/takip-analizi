@@ -1,5 +1,5 @@
 // Service worker: uygulama dosyalarını önbelleğe alır, çevrimdışı çalışmayı sağlar.
-const CACHE = 'takip-analizi-v3';
+const CACHE = 'takip-analizi-v4';
 const FILES = [
   './',
   './index.html',
@@ -26,9 +26,10 @@ self.addEventListener('activate', e => {
 
 self.addEventListener('fetch', e => {
   if (e.request.method !== 'GET') return;
-  // Önce ağdan dene (güncel kalsın), olmazsa önbellekten ver (çevrimdışı çalışsın)
+  // Önce ağdan güncel halini iste (cache: no-cache = sunucuya "değişti mi?" diye sor),
+  // ağ yoksa önbellekten ver (çevrimdışı çalışsın)
   e.respondWith(
-    fetch(e.request).then(res => {
+    fetch(e.request, { cache: 'no-cache' }).then(res => {
       const copy = res.clone();
       caches.open(CACHE).then(c => c.put(e.request, copy)).catch(() => {});
       return res;

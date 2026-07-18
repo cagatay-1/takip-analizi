@@ -170,6 +170,19 @@
   }
   .reset-btn:hover { border-color: var(--accent); color: var(--text); }
 
+  .warn-banner {
+    display: none; gap: 10px; align-items: flex-start;
+    background: rgba(230,162,60,.1); border: 1px solid rgba(230,162,60,.4);
+    border-radius: 14px; padding: 14px 16px; margin-bottom: 18px;
+    font-size: 13px; color: var(--text-dim); line-height: 1.65;
+  }
+  .warn-banner b { color: var(--yellow); }
+  .warn-banner .close {
+    margin-left: auto; background: none; border: none;
+    color: var(--text-dim); cursor: pointer; font-size: 15px; flex-shrink: 0;
+  }
+  .ver { text-align: center; color: var(--text-dim); font-size: 11px; margin-top: 20px; opacity: .7; }
+
   .content { flex: 1; padding: 28px 32px; max-width: 780px; }
   .content-head { margin-bottom: 6px; }
   .content-head h2 { font-size: 21px; display: flex; align-items: center; gap: 10px; }
@@ -303,6 +316,7 @@
   </div>
   <input type="file" id="fileInput" multiple accept=".zip,.json,.html">
   <div class="error-box" id="errorBox"></div>
+  <div class="ver">Sürüm 4</div>
 </div>
 
 <!-- ============ 2) PANEL EKRANI ============ -->
@@ -326,10 +340,16 @@
       <div class="sb-footer">
         <div class="sb-note">🔒 Verin bu sayfadan dışarı çıkmaz. Sekmeyi kapattığında her şey silinir.</div>
         <button class="reset-btn" id="resetBtn">↺ Yeni dosya yükle</button>
+        <div class="ver">Sürüm 4</div>
       </div>
     </aside>
 
     <main class="content">
+      <div class="warn-banner" id="rangeWarn">
+        <div>⚠️</div>
+        <div id="rangeWarnText"></div>
+        <button class="close" onclick="this.parentElement.style.display='none'">✕</button>
+      </div>
       <div class="content-head">
         <h2 id="tabTitle"></h2>
         <div class="desc" id="tabDesc"></div>
@@ -360,6 +380,7 @@
   let data = { notBack: [], pending: [], fans: [], mutual: [] };
   let pendingFileFound = false;
   let activeTab = 'notBack';
+  let detectedRange = null; // export'un kapsadığı tarih aralığı (HTML başlığından okunur)
 
   const TABS = {
     notBack: {
@@ -482,6 +503,17 @@
   // HTML formatındaki export'u okur — Instagram iki farklı biçim kullanıyor
   function parseHtmlUsers(htmlText) {
     const doc = new DOMParser().parseFromString(htmlText, 'text/html');
+
+    // Dosya başlığındaki kapsam bilgisi: 1. tarih oluşturma anı, 2-3. tarihler kapsanan aralık
+    if (!detectedRange) {
+      const times = doc.querySelectorAll('aside time');
+      if (times.length >= 3) {
+        const s = Date.parse(times[1].getAttribute('datetime'));
+        const e = Date.parse(times[2].getAttribute('datetime'));
+        if (!isNaN(s) && !isNaN(e) && e > s) detectedRange = { start: s / 1000, end: e / 1000 };
+      }
+    }
+
     const users = [];
     const seen = new Set();
     const add = (name, t) => {
@@ -547,6 +579,20 @@
     $('ratioVal').textContent = '%' + ratio;
     $('ratioBar').style.width = ratio + '%';
     $('ratioSub').textContent = `${following.length} takipten ${data.mutual.length}'i seni geri takip ediyor`;
+
+    // Eksik veri uyarısı: export tüm geçmişi kapsamıyorsa kullanıcıyı bilgilendir
+    const YEAR = 365 * 86400;
+    let warnMsg = '';
+    if (detectedRange && detectedRange.end - detectedRange.start < 3 * YEAR) {
+      warnMsg = `Bu veri tüm geçmişini kapsamıyor: yalnızca <b>${formatDate(detectedRange.start)} – ${formatDate(detectedRange.end)}</b> aralığı indirilmiş. Bu aralıktan önce seni takip etmeye başlayan kişiler dosyada olmadığından, "Takip Etmeyenler" listesinde <b>gerçekte seni takip eden eski takipçilerin de görünebilir</b>. Kesin sonuç için Instagram'dan verini tarih aralığı <b>"Tüm zamanlar"</b> seçili olacak şekilde yeniden indir.`;
+    } else if (!detectedRange) {
+      const ts = [...followers, ...following].map(x => x.t).filter(Boolean);
+      if (ts.length && Math.min(...ts) > Date.now() / 1000 - 2 * YEAR) {
+        warnMsg = `Verindeki en eski kayıt <b>${formatDate(Math.min(...ts))}</b> tarihli. Veri talebinde tarih aralığını <b>"Tüm zamanlar"</b> seçmediysen, daha eski takipçilerin listede eksik olabilir ve sonuçlar yanıltıcı görünebilir.`;
+      }
+    }
+    $('rangeWarn').style.display = warnMsg ? 'flex' : 'none';
+    $('rangeWarnText').innerHTML = warnMsg;
 
     buildNav();
     $('uploadScreen').style.display = 'none';
@@ -639,6 +685,7 @@
   $('resetBtn').addEventListener('click', () => {
     data = { notBack: [], pending: [], fans: [], mutual: [] };
     pendingFileFound = false;
+    detectedRange = null;
     fileInput.value = '';
     $('appScreen').style.display = 'none';
     $('uploadScreen').style.display = 'block';
